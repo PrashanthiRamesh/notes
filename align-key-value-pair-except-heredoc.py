@@ -3,7 +3,7 @@ import re
 def align_key_value_pairs(content: str) -> str:
     """
     Align '=' signs for key-value pairs in Terraform content.
-    Does not modify anything inside heredoc content.
+    Only aligns the key=value line for heredocs; does not modify heredoc content.
     """
     lines = content.splitlines()
     output = []
@@ -17,7 +17,7 @@ def align_key_value_pairs(content: str) -> str:
     for line in lines:
         stripped = line.strip()
 
-        # Detect start or end of heredoc
+        # If inside heredoc content, just append
         if inside_heredoc:
             output.append(line)
             if stripped == heredoc_delimiter:
@@ -29,30 +29,21 @@ def align_key_value_pairs(content: str) -> str:
         kv_match = kv_pattern.match(line)
         if kv_match:
             indent, key, value = kv_match.groups()
-
-            # Check for heredoc
+            # Check if heredoc
             heredoc_match = re.match(r'<<-?([A-Z0-9_]+)', value)
-            if heredoc_match:
-                # Flush previous block
-                if block:
-                    for b in block:
-                        i_indent, i_key, i_value = b
-                        spaces = ' ' * (max_key_length - len(i_key))
-                        output.append(f"{i_indent}{i_key}{spaces} = {i_value}")
-                    block = []
-                    max_key_length = 0
+            # Add line to block for alignment
+            block.append((indent, key, value))
 
-                # Add the heredoc declaration line aligned
-                output.append(f"{indent}{key} = {value}")
+            # Update max key length for this block
+            if len(key) > max_key_length:
+                max_key_length = len(key)
+
+            # If this is a heredoc declaration, start skipping content after this line
+            if heredoc_match:
                 inside_heredoc = True
                 heredoc_delimiter = heredoc_match.group(1)
-            else:
-                # Collect block of key-value pairs
-                block.append((indent, key, value))
-                if len(key) > max_key_length:
-                    max_key_length = len(key)
         else:
-            # Flush previous block
+            # Flush block
             if block:
                 for b in block:
                     i_indent, i_key, i_value = b
@@ -62,7 +53,7 @@ def align_key_value_pairs(content: str) -> str:
                 max_key_length = 0
             output.append(line)
 
-    # Flush remaining block
+    # Flush remaining block at the end
     if block:
         for b in block:
             i_indent, i_key, i_value = b
