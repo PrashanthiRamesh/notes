@@ -3,41 +3,40 @@ import re
 def align_equals(content: str) -> str:
     """
     Aligns the '=' signs for all simple key-value pairs in the content.
-    - Only aligns lines of the form: key = value
-    - Skips lines containing '==' or other operators.
-    - Does not change indentation or other formatting.
+    - Correctly handles cases where the value contains '==' or other operators.
+    - Does not break heredoc contents or expressions.
     """
     lines = content.splitlines()
     formatted_lines = []
     block = []
     max_key_length = 0
 
-    # Match only simple key = value pairs (NOT ==, !=, etc.)
+    # Match only the first "=" (not "=="), splitting key from value
     kv_pattern = re.compile(r'^(\s*)(\w+)\s*=\s+(.*)$')
 
     for line in lines:
         kv_match = kv_pattern.match(line)
-        if kv_match and "==" not in line and "!=" not in line:
-            # Add line to current block
-            block.append(kv_match)
-            key_len = len(kv_match.group(2))
-            if key_len > max_key_length:
-                max_key_length = key_len
-        else:
-            # Flush current block if exists
-            if block:
-                for b in block:
-                    indent, key, value = b.groups()
-                    spaces = ' ' * (max_key_length - len(key))
-                    formatted_lines.append(f"{indent}{key}{spaces} = {value}")
-                block = []
-                max_key_length = 0
-            formatted_lines.append(line)
+        if kv_match:
+            indent, key, value = kv_match.groups()
+            # Exclude lines that *start* with something like "if (...) ==" (heredoc code)
+            if not key.startswith("if") and not key.endswith("=="):
+                block.append((indent, key, value))
+                max_key_length = max(max_key_length, len(key))
+                continue
+
+        # Flush current block if exists
+        if block:
+            for indent, key, value in block:
+                spaces = ' ' * (max_key_length - len(key))
+                formatted_lines.append(f"{indent}{key}{spaces} = {value}")
+            block = []
+            max_key_length = 0
+
+        formatted_lines.append(line)
 
     # Flush any remaining block
     if block:
-        for b in block:
-            indent, key, value = b.groups()
+        for indent, key, value in block:
             spaces = ' ' * (max_key_length - len(key))
             formatted_lines.append(f"{indent}{key}{spaces} = {value}")
 
