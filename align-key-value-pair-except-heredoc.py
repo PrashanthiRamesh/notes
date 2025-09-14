@@ -1,81 +1,56 @@
 import re
 
-def align_key_value_pairs(content: str) -> str:
+def align_equals(content: str) -> str:
     """
-    Align '=' signs for key-value pairs in Terraform content.
-    Only aligns the key=value line for heredocs; does not modify heredoc content.
+    Aligns the '=' signs for all simple key-value pairs in the content.
+    Skips lines containing '==' (conditional checks).
+    Does not change indentation or other formatting.
     """
     lines = content.splitlines()
-    output = []
+    formatted_lines = []
     block = []
     max_key_length = 0
-    inside_heredoc = False
-    heredoc_delimiter = ""
 
+    # Regex to detect key = value pairs (ignoring leading/trailing spaces)
     kv_pattern = re.compile(r'^(\s*)(\w+)\s*=\s*(.*)$')
 
     for line in lines:
-        stripped = line.strip()
-
-        # If inside heredoc content, just append
-        if inside_heredoc:
-            output.append(line)
-            if stripped == heredoc_delimiter:
-                inside_heredoc = False
-                heredoc_delimiter = ""
-            continue
-
-        # Match key=value
-        kv_match = kv_pattern.match(line)
-        if kv_match:
-            indent, key, value = kv_match.groups()
-            # Check if heredoc
-            heredoc_match = re.match(r'<<-?([A-Z0-9_]+)', value)
-            # Add line to block for alignment
-            block.append((indent, key, value))
-
-            # Update max key length for this block
-            if len(key) > max_key_length:
-                max_key_length = len(key)
-
-            # If this is a heredoc declaration, start skipping content after this line
-            if heredoc_match:
-                inside_heredoc = True
-                heredoc_delimiter = heredoc_match.group(1)
-        else:
-            # Flush block
+        # Skip alignment if it's a conditional (contains '==')
+        if "==" in line:
+            # Flush block first
             if block:
                 for b in block:
-                    i_indent, i_key, i_value = b
-                    spaces = ' ' * (max_key_length - len(i_key))
-                    output.append(f"{i_indent}{i_key}{spaces} = {i_value}")
+                    indent, key, value = b.groups()
+                    spaces = ' ' * (max_key_length - len(key))
+                    formatted_lines.append(f"{indent}{key}{spaces} = {value}")
                 block = []
                 max_key_length = 0
-            output.append(line)
+            formatted_lines.append(line)
+            continue
 
-    # Flush remaining block at the end
+        kv_match = kv_pattern.match(line)
+        if kv_match:
+            # Add line to current block
+            block.append(kv_match)
+            key_len = len(kv_match.group(2))
+            if key_len > max_key_length:
+                max_key_length = key_len
+        else:
+            # Flush current block if exists
+            if block:
+                for b in block:
+                    indent, key, value = b.groups()
+                    spaces = ' ' * (max_key_length - len(key))
+                    formatted_lines.append(f"{indent}{key}{spaces} = {value}")
+                block = []
+                max_key_length = 0
+            formatted_lines.append(line)
+
+    # Flush any remaining block
     if block:
         for b in block:
-            i_indent, i_key, i_value = b
-            spaces = ' ' * (max_key_length - len(i_key))
-            output.append(f"{i_indent}{i_key}{spaces} = {i_value}")
+            indent, key, value = b.groups()
+            spaces = ' ' * (max_key_length - len(key))
+            formatted_lines.append(f"{indent}{key}{spaces} = {value}")
 
-    return "\n".join(output)
-
-
-# Example usage
-if __name__ == "__main__":
-    example_tf = """
-resource "example_resource" "test" {
-  name = "example"
-  query = <<QUERY
-SELECT *
-FROM table
-WHERE id = 1;
-QUERY
-  display_name = "Example Resource"
-  severity = "high"
-  other_property = "value"
-}
-"""
-    print(align_key_value_pairs(example_tf))
+    return "\n".join(formatted_lines)
