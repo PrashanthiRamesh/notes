@@ -3,8 +3,7 @@ import re
 def align_equals(content: str) -> str:
     """
     Aligns the '=' signs for all simple key-value pairs in the content.
-    Skips lines containing '==' (conditional checks).
-    Does not change indentation or other formatting.
+    If the value contains '==', it preserves it exactly without inserting spaces around '=='.
     """
     lines = content.splitlines()
     formatted_lines = []
@@ -15,19 +14,6 @@ def align_equals(content: str) -> str:
     kv_pattern = re.compile(r'^(\s*)(\w+)\s*=\s*(.*)$')
 
     for line in lines:
-        # Skip alignment if it's a conditional (contains '==')
-        if "==" in line:
-            # Flush block first
-            if block:
-                for b in block:
-                    indent, key, value = b.groups()
-                    spaces = ' ' * (max_key_length - len(key))
-                    formatted_lines.append(f"{indent}{key}{spaces} = {value}")
-                block = []
-                max_key_length = 0
-            formatted_lines.append(line)
-            continue
-
         kv_match = kv_pattern.match(line)
         if kv_match:
             # Add line to current block
@@ -40,6 +26,7 @@ def align_equals(content: str) -> str:
             if block:
                 for b in block:
                     indent, key, value = b.groups()
+                    # Preserve '==' formatting inside the value
                     spaces = ' ' * (max_key_length - len(key))
                     formatted_lines.append(f"{indent}{key}{spaces} = {value}")
                 block = []
