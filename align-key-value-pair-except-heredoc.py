@@ -3,19 +3,21 @@ import re
 def align_equals(content: str) -> str:
     """
     Aligns the '=' signs for all simple key-value pairs in the content.
-    If the value contains '==', it preserves it exactly without inserting spaces around '=='.
+    - Only aligns lines of the form: key = value
+    - Skips lines containing '==' or other operators.
+    - Does not change indentation or other formatting.
     """
     lines = content.splitlines()
     formatted_lines = []
     block = []
     max_key_length = 0
 
-    # Regex to detect key = value pairs (ignoring leading/trailing spaces)
-    kv_pattern = re.compile(r'^(\s*)(\w+)\s*=\s*(.*)$')
+    # Match only simple key = value pairs (NOT ==, !=, etc.)
+    kv_pattern = re.compile(r'^(\s*)(\w+)\s*=\s+(.*)$')
 
     for line in lines:
         kv_match = kv_pattern.match(line)
-        if kv_match:
+        if kv_match and "==" not in line and "!=" not in line:
             # Add line to current block
             block.append(kv_match)
             key_len = len(kv_match.group(2))
@@ -26,7 +28,6 @@ def align_equals(content: str) -> str:
             if block:
                 for b in block:
                     indent, key, value = b.groups()
-                    # Preserve '==' formatting inside the value
                     spaces = ' ' * (max_key_length - len(key))
                     formatted_lines.append(f"{indent}{key}{spaces} = {value}")
                 block = []
